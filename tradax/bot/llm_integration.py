@@ -229,3 +229,48 @@ def enhance_message_advance(results):
     except Exception as e:
         logging.error(f"❌ Error in Gemini API call: {e}")
         return "⚠️ Could not generate message right now."
+
+
+
+def enhance_message_extra(results):
+    prompt = f"""
+You are a professional financial assistant creating a concise, Telegram-friendly message.
+
+Here is the recent S&P 500 stock data:
+{results}
+
+Please format the output in **four separate sections**:
+
+1. 📅 Daily Movers:
+   - List only the stocks relevant for daily changes.
+   - Each stock on a separate line.
+   - Show Ticker, RSI, DailyChange, VolumeSpike, and Signal.
+   - Add an **emoji for up (🔼), down (🔽), or neutral (⏺️)** based on the daily change.
+   - Keep it clean and readable.
+
+2. 📈 Weekly Movers:
+   - Same as above, but focus on weekly change.
+
+3. 📆 Monthly Movers:
+   - Same as above, but focus on monthly change.
+
+4. 🔁 Intersection Movers:
+   - List any stocks that appear in multiple timeframes.
+   - Include the Signal for each stock.
+   - Keep formatting consistent.
+
+Finally, in 💡 Insight & Advice:
+   - Give a short summary (3–5 sentences).
+   - Focus on trends, dominant performers, and patterns in these lists only.
+   - Include the Signal to justify Buy/Sell/Hold suggestions.
+   - Keep advice actionable and **relevant only to these stocks**.
+"""
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[{"text": prompt}]
+        )
+        return response.text
+    except Exception as e:
+        logging.error(f"❌ Error in Gemini API call: {e}")
+        return "⚠️ Could not generate message right now"

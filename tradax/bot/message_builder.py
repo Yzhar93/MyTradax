@@ -37,6 +37,51 @@ def format_section(title, stocks, change_key, vol_key):
     return "\n".join(lines)
 
 
+def format_section_extra(title, stocks, change_key, vol_key, show_signal=False):
+    """Format a single section (daily/weekly/monthly) into text with optional Signal."""
+    if not stocks:
+        return f"\n📈 {title} Top Movers:\n• No data available."
+
+    lines = [f"\n📈 {title} Top Movers:"]
+    for s in stocks:
+        symbol = s["symbol"]
+        price = s["price"]
+        change = s[change_key]
+        vol = s[vol_key]
+        emoji = "🔺" if change > 0 else "🔻" if change < 0 else "⏺"
+
+        line = f"{emoji} {symbol}: ${price} ({change:+.2f}%) | Vol: {vol:,}"
+        if show_signal and "Signal" in s:
+            line += f" | Signal: {s['Signal']}"
+        lines.append(line)
+    return "\n".join(lines)
+
+def build_message_extra(top_stocks_data, title="📊 S&P 500 Movers Summary"):
+    """Build a formatted Telegram message from stock data dictionary, including trading signals."""
+    if not top_stocks_data or not any(top_stocks_data.values()):
+        return f"{title}\n\nNo stock data available."
+
+    parts = [title]
+
+    # Format each period with Signal included
+    parts.append(format_section_extra("Daily", top_stocks_data.get("daily", []), "daily_change", "daily_vol", show_signal=True))
+    parts.append(format_section_extra("Weekly", top_stocks_data.get("weekly", []), "weekly_change", "weekly_vol", show_signal=True))
+    parts.append(format_section_extra("Monthly", top_stocks_data.get("monthly", []), "monthly_change", "monthly_vol", show_signal=True))
+
+    # Intersection section with Signal
+    intersection = top_stocks_data.get("intersection", [])
+    if intersection:
+        intersection_lines = []
+        for sym in intersection:
+            # Get the latest signal from daily list
+            stock_signal = next((x["Signal"] for x in top_stocks_data.get("daily", []) if x["symbol"] == sym), "Hold")
+            intersection_lines.append(f"{sym} ({stock_signal})")
+        parts.append(f"\n🔁 Intersection (Consistent Movers): " + ", ".join(intersection_lines))
+    else:
+        parts.append("\n🔁 No overlapping movers across periods.")
+
+    return "\n".join(parts)
+
 def build_message_advance(top_stocks_data, title="📊 S&P 500 Movers Summary"):
     """Build a formatted Telegram message from stock data dictionary."""
     if not top_stocks_data or not any(top_stocks_data.values()):
