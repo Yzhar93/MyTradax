@@ -32,5 +32,5 @@ jobs:
             --trigger-http\
             --allow-unauthenticated \
             --region=europe-west1 \
-            --entry-point=stock-summary \
+            --entry-point=stock_summary \
             --source=.
