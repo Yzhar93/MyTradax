@@ -52,30 +52,17 @@ def calculate_rsi(series, period=14):
     return rsi
 
 def calculate_rsi_advanced(series, period=14):
-    prices = pd.Series(series).astype(float)
-    delta = prices.diff()
-
-    # Gains and losses
+    delta = series.astype(float).diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-
-    # Wilder’s initial SMA for first period
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
-
-    # Now apply Wilder’s smoothing recursively
-    for i in range(period, len(prices)):
-        avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (period - 1) + gain.iloc[i]) / period
-        avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (period - 1) + loss.iloc[i]) / period
-
-    # RS and RSI calculation
+    
+    # Wilder's Smoothing -> alpha = 1 / period
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-
-    # Stability: if avg_loss is 0 → RSI should be 100 (no losses)
-    rsi = rsi.fillna(0).clip(lower=0, upper=100)
-
-    return rsi
+    return rsi.fillna(0).clip(lower=0, upper=100)
 
 def wyckoff_phase(df, window=20, volume_multiplier=1.5):
     """
@@ -85,115 +72,78 @@ def wyckoff_phase(df, window=20, volume_multiplier=1.5):
     volume_multiplier - כמה גבוה הנפח לעומת ממוצע כדי לזהות פעילות חריגה
     """
     df = df.copy()
-    df['High_roll'] = df['Close'].rolling(window).max()
-    df['Low_roll'] = df['Close'].rolling(window).min()
+    # Shift applied to avoid including the current day in breakout validation
+    df['High_roll'] = df['Close'].shift().rolling(window).max()
+    df['Low_roll'] = df['Close'].shift().rolling(window).min()
     df['Volume_avg'] = df['Volume'].rolling(window).mean()
 
-    phases = []
-    for i in range(len(df)):
-        price = df['Close'].iloc[i]
-        vol = df['Volume'].iloc[i]
-        high = df['High_roll'].iloc[i]
-        low = df['Low_roll'].iloc[i]
-        vol_avg = df['Volume_avg'].iloc[i]
+    cond_acc = (df['Close'] >= df['Low_roll']) & (df['Close'] <= df['High_roll']) & (df['Volume'] < df['Volume_avg'] * volume_multiplier)
+    cond_markup = (df['Close'] > df['High_roll']) & (df['Volume'] > df['Volume_avg'])
+    cond_dist = (df['Close'] >= df['Low_roll']) & (df['Close'] <= df['High_roll']) & (df['Volume'] >= df['Volume_avg'] * volume_multiplier)
+    cond_markdown = (df['Close'] < df['Low_roll']) & (df['Volume'] > df['Volume_avg'] * 0.5)
 
-        if np.isnan(high) or np.isnan(low) or np.isnan(vol_avg):
-            phases.append(None)
-            continue
-
-        # Accumulation:
-        if low <= price <= high and vol < vol_avg * volume_multiplier:
-            phases.append('Accumulation')
-        # Markup:
-        elif price > high and vol > vol_avg:
-            phases.append('Markup')
-        # Distribution:
-        elif low <= price <= high and vol > vol_avg * volume_multiplier:
-            phases.append('Distribution')
-        # Markdown:
-        elif price < low and vol > vol_avg * 0.5:
-            phases.append('Markdown')
-        else:
-            phases.append(None)
-
-    df['WyckoffPhase'] = phases
+    conditions = [cond_markup, cond_markdown, cond_acc, cond_dist]
+    choices = ['Markup', 'Markdown', 'Accumulation', 'Distribution']
+    
+    df['WyckoffPhase'] = np.select(conditions, choices, default=None)
     return df
 
 
 def generate_trading_signal_advanced(df, volume_multiplier=1.5):
     """
-    Generate Buy / Sell / Hold signals using:
+    Generate Buy / Sell / Hold signals using a Scoring System:
     ✅ Trend (MA crossover)
     ✅ Strength (RSI)
     ✅ Market cycle context (Wyckoff)
-    ✅ Volume confirmation (optional)
-
-    Output:
-      - df['Signal'] = final trading signal
-      - df['SignalReason'] = explanation for the decision
     """
 
     df = df.copy()
     df['VolumeSpike'] = df['Volume'] / df['Volume'].rolling(window=20).mean()
+    
+    score = pd.Series(0, index=df.index)
+    reasons = pd.Series("", index=df.index)
 
-    signals = []
-    reasons = []
+    # ==== 1️⃣ TREND SCORE ====
+    trend_up = df['MA_short'] > df['MA_long']
+    trend_down = df['MA_short'] < df['MA_long']
+    score += np.where(trend_up, 1, 0)
+    score += np.where(trend_down, -1, 0)
+    reasons += np.where(trend_up, "Trend Up (+1); ", "")
+    reasons += np.where(trend_down, "Trend Down (-1); ", "")
 
-    for i in range(len(df)):
-        row = df.iloc[i]
-        signal = "Hold"
-        reason_log = []
+    # ==== 2️⃣ RSI SCORE ====
+    rsi_overbought = df['RSI'] >= 70
+    rsi_oversold = df['RSI'] <= 30
+    score += np.where(rsi_oversold, 2, 0)
+    score += np.where(rsi_overbought, -2, 0)
+    reasons += np.where(rsi_oversold, "Oversold (+2); ", "")
+    reasons += np.where(rsi_overbought, "Overbought (-2); ", "")
 
-        # ==== 1️⃣ TREND: Moving Average Crossover ====
-        if row['MA_short'] > row['MA_long']:
-            signal = "Buy"
-            reason_log.append("Trend Up (MA short > MA long)")
-        elif row['MA_short'] < row['MA_long']:
-            signal = "Sell"
-            reason_log.append("Trend Down (MA short < MA long)")
-        else:
-            reason_log.append("No clear trend")
+    # ==== 3️⃣ MARKET CYCLE SCORE ====
+    phase = df['WyckoffPhase']
+    score += np.where(phase == 'Accumulation', 2, 0)
+    score += np.where(phase == 'Markup', 1, 0)
+    score += np.where(phase == 'Distribution', -2, 0)
+    score += np.where(phase == 'Markdown', -1, 0)
 
-        # ==== 2️⃣ STRENGTH: RSI Filter ====
-        if row['RSI'] >= 70:
-            signal = "Sell"
-            reason_log.append("Overbought (RSI ≥ 70)")
-        elif row['RSI'] <= 30:
-            signal = "Buy"
-            reason_log.append("Oversold (RSI ≤ 30)")
+    reasons += np.where(phase == 'Accumulation', "Accumulation (+2); ", "")
+    reasons += np.where(phase == 'Markup', "Markup (+1); ", "")
+    reasons += np.where(phase == 'Distribution', "Distribution (-2); ", "")
+    reasons += np.where(phase == 'Markdown', "Markdown (-1); ", "")
 
-        # ==== 3️⃣ MARKET CYCLE: Wyckoff Adjustment ====
-        phase = row.get('WyckoffPhase', None)
-
-        if phase == "Accumulation":
-            if signal == "Hold":
-                signal = "Buy"
-            reason_log.append("Accumulation Phase ✅ Buy support")
-
-        elif phase == "Markup":
-            if signal == "Sell":
-                signal = "Hold"  # don't panic sell in growth
-            reason_log.append("Markup Phase 🚀 Trend support")
-
-        elif phase == "Distribution":
-            if signal == "Hold":
-                signal = "Sell"
-            reason_log.append("Distribution Phase ⚠️ Sell risk")
-
-        elif phase == "Markdown":
-            if signal == "Buy":
-                signal = "Hold"
-            reason_log.append("Markdown Phase ⬇️ Weak market")
-
-        # ==== 4️⃣ VOLUME Confirmation ====
-        if row['VolumeSpike'] > volume_multiplier:
-            reason_log.append("High Volume 🔥 Institutional interest")
-
-        signals.append(signal)
-        reasons.append("; ".join(reason_log))
-
-    df['Signal'] = signals
-    df['SignalReason'] = reasons
+    # ==== 4️⃣ COMPILE FINAL SIGNALS ====
+    conditions = [
+        score >= 3,
+        (score == 1) | (score == 2),
+        score == 0,
+        (score == -1) | (score == -2),
+        score <= -3
+    ]
+    choices = ['Strong Buy', 'Buy', 'Hold', 'Sell', 'Strong Sell']
+    df['Signal'] = np.select(conditions, choices, default='Hold')
+    df['SignalReason'] = reasons.str.strip('; ')
+    df['SignalScore'] = score
+    
     return df
 
 def generate_trading_signal(df):
