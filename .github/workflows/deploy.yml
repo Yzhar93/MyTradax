@@ -33,5 +33,6 @@ jobs:
             --allow-unauthenticated \
             --region=europe-west1 \
             --entry-point=stock_summary \
+            --memory=512Mi \
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_API_URL=${{ secrets.GEMINI_API_URL }},FINNHUB_API_TOKEN=${{ secrets.FINNHUB_API_TOKEN }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
             --source=.
