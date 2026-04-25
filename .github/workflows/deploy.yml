@@ -1,0 +1,35 @@
+name: Deploy Cloud Function
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/856703908469/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-deployer@zeta-sky-458619-q6.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy function
+        run: |
+          gcloud functions deploy stock-summary \
+            --runtime python311 \
+            --trigger-http \
+            --allow-unauthenticated \
+            --region=europe-west1 \
+            --entry-point=stock-summary \
+            --source=.
