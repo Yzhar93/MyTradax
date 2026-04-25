@@ -27,6 +27,7 @@ jobs:
       - name: Deploy function
         run: |
           gcloud functions deploy stock-summary \
+            --gen2 \
             --runtime python311 \
             --trigger-http \
             --allow-unauthenticated \
