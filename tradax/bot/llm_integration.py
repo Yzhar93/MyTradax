@@ -11,6 +11,7 @@ GEMINI_API_URL = os.environ.get("GEMINI_API_URL")
 import os
 # import google.generativeai as genai
 import google.genai as genai
+from tradax.helpers.utils import retry_with_backoff
 # genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 #
 # # Initialize the client (API key should already be set via environment)
@@ -32,18 +33,30 @@ Do not add generic or unrelated information.
     """
 
     try:
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return resp.text
+        return _generate_with_retry(client, prompt)
     except Exception as e:
         logging.error(f"❌ Error generating message with Gemini: {e}")
-        return "⚠️ AI summarization unavailable right now."
+        return results
 
 
 
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+@retry_with_backoff(retries=3, backoff_in_seconds=2)
+def _generate_with_retry(client_instance, prompt):
+    resp = client_instance.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+    return resp.text
+
+@retry_with_backoff(retries=3, backoff_in_seconds=2)
+def _generate_with_retry_extra(client_instance, prompt):
+    resp = client_instance.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[{"text": prompt}]
+    )
+    return resp.text
 
 def enhance_message_advance(results):
     prompt = f"""
@@ -77,14 +90,10 @@ def enhance_message_advance(results):
        - Make advice actionable and **relevant only to these stocks**.
     """
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return response.text
+        return _generate_with_retry(client, prompt)
     except Exception as e:
         logging.error(f"❌ Error in Gemini API call: {e}")
-        return "⚠️ Could not generate message right now."
+        return results
 
 
 
@@ -122,11 +131,7 @@ Finally, in 💡 Insight & Advice:
    - Keep advice actionable and **relevant only to these stocks**.
 """
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[{"text": prompt}]
-        )
-        return response.text
+        return _generate_with_retry_extra(client, prompt)
     except Exception as e:
         logging.error(f"❌ Error in Gemini API call: {e}")
-        return "⚠️ Could not generate message right now"
+        return results
