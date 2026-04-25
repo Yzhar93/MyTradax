@@ -1,0 +1,9 @@
+requests
+yfinance
+python-dotenv
+lxml
+html5lib
+google-generativeai
+pandas
+numpy
+google-genai>=0.1.0
