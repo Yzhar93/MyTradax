@@ -6,7 +6,7 @@ import logging
 
 
 
-def stock_summary(event, context):
+def stock_summary(request):
     try:
         stocks = get_top_stocks_extra()
         msg = build_message_extra(stocks)

@@ -29,7 +29,7 @@ jobs:
           gcloud functions deploy stock-summary \
             --gen2 \
             --runtime python311 \
-            --trigger-http \
+            --trigger-topic stock_summary-topic\
             --allow-unauthenticated \
             --region=europe-west1 \
             --entry-point=stock-summary \
