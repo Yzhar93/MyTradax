@@ -12,5 +12,7 @@ def stock_summary(request):
         msg = build_message_extra(stocks)
         msg = enhance_message_extra(msg)  # optional Gemini integration
         send_telegram_message(msg)
+        return "OK", 200
     except Exception as e:
         logging.error(f"Function failed: {e}")
+        return f"Error: {e}", 500
