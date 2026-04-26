@@ -8,11 +8,11 @@ def get_sp500_tickers():
     url = 'https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv'
     df = pd.read_csv(url)
     sp500_symbols = df['Symbol'].tolist()
-    return sp500_symbols
+    return [t.replace('.', '-') for t in sp500_symbols]
 
 def get_top_stocks(top_n=10):
     tickers = get_sp500_tickers()
-    data = yf.download(tickers, period="2d", interval="1d", group_by="ticker", progress=False)
+    data = yf.download(tickers, period="2d", interval="1d", group_by="ticker", progress=False, timeout=20)
 
     movers = []
     for t in tickers:
@@ -230,13 +230,17 @@ def generate_trading_signal(df):
 
 def get_top_stocks_advance(top_n=10, intersect_n=20):
     tickers = get_sp500_tickers()
-    data = yf.download(tickers, period="1mo", interval="1d", group_by="ticker", progress=False)
+    data = yf.download(tickers, period="1mo", interval="1d", group_by="ticker", progress=False, timeout=20)
 
     daily_changes, weekly_changes, monthly_changes = [], [], []
 
     for t in tickers:
         try:
-            df = data[t]
+            df = data[t].copy()
+            if df.empty or 'Close' not in df.columns:
+                continue
+                
+            df = df.dropna(subset=['Close'])
             if len(df) < 2:
                 continue
 
@@ -312,13 +316,18 @@ def get_top_stocks_advance(top_n=10, intersect_n=20):
 
 def get_top_stocks_extra(top_n=10, intersect_n=20):
     tickers = get_sp500_tickers()
-    data = yf.download(tickers, period="1mo", interval="1d", group_by="ticker", progress=False)
+    data = yf.download(tickers, period="1mo", interval="1d", group_by="ticker", progress=False, timeout=20)
 
     daily_changes, weekly_changes, monthly_changes = [], [], []
 
     for t in tickers:
         try:
             df = data[t].copy()
+            if df.empty or 'Close' not in df.columns:
+                continue
+
+            # Clear missing data
+            df = df.dropna(subset=['Close'])
             if len(df) < 2:
                 continue
 
