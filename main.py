@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+
 def stock_summary(event, context):
     try:
         stocks = get_top_stocks_extra()
