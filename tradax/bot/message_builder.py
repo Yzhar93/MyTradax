@@ -82,6 +82,27 @@ def build_message_extra(top_stocks_data, title="📊 S&P 500 Movers Summary"):
 
     return "\n".join(parts)
 
+def build_message_crypto(crypto_data, title="🪙 Crypto Movers Summary"):
+    """Build a formatted Telegram message from crypto data dictionary."""
+    if not crypto_data or not any(crypto_data.get(k) for k in ("daily", "weekly", "monthly")):
+        return f"{title}\n\nNo crypto data available."
+
+    parts = [title]
+
+    parts.append(format_section_extra("Daily", crypto_data.get("daily", []), "daily_change", "daily_vol", show_signal=True))
+    parts.append(format_section_extra("Weekly", crypto_data.get("weekly", []), "weekly_change", "weekly_vol", show_signal=True))
+    parts.append(format_section_extra("Monthly", crypto_data.get("monthly", []), "monthly_change", "monthly_vol", show_signal=True))
+
+    intersection = crypto_data.get("intersection_with_signals", [])
+    if intersection:
+        items = ", ".join(f"{x['symbol']} ({x['Signal']})" for x in intersection)
+        parts.append(f"\n🔁 Intersection (Consistent Movers): {items}")
+    else:
+        parts.append("\n🔁 No overlapping movers across periods.")
+
+    return "\n".join(parts)
+
+
 def build_message_advance(top_stocks_data, title="📊 S&P 500 Movers Summary"):
     """Build a formatted Telegram message from stock data dictionary."""
     if not top_stocks_data or not any(top_stocks_data.values()):
