@@ -11,6 +11,11 @@ def retry_with_backoff(retries=3, backoff_in_seconds=1):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    error_str = str(e).lower()
+                    if "429" in error_str or "quota" in error_str:
+                        logging.error(f"🚫 Quota Limit Reached (429). Aborting retries for {func.__name__}.")
+                        raise e
+                    
                     if attempt >= retries:
                         raise e
                     sleep_time = backoff_in_seconds * (2 ** attempt)
