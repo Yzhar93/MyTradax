@@ -135,3 +135,44 @@ Finally, in 💡 Insight & Advice:
     except Exception as e:
         logging.error(f"❌ Error in Gemini API call: {e}")
         return results
+
+
+def enhance_message_crypto(results):
+    prompt = f"""
+You are a professional crypto analyst creating a concise, Telegram-friendly message.
+
+Here is the recent crypto market data:
+{results}
+
+Please format the output in **four separate sections**:
+
+1. 📅 Daily Movers:
+   - List only the coins relevant for daily changes.
+   - Each coin on a separate line.
+   - Show Symbol, DailyChange, Volume, and Signal.
+   - Add an **emoji for up (🔼), down (🔽), or neutral (⏺️)** based on the daily change.
+   - Keep it clean and readable.
+
+2. 📈 Weekly Movers:
+   - Same as above, but focus on weekly change.
+
+3. 📆 Monthly Movers:
+   - Same as above, but focus on monthly change.
+
+4. 🔁 Intersection Movers:
+   - List coins that appear in all three timeframes (sustained momentum).
+   - Include the Signal for each coin.
+   - Keep formatting consistent.
+
+Finally, in 💡 Crypto Insight & Advice:
+   - Give a short summary (3–5 sentences).
+   - Focus on trends, dominant movers, and patterns in these coins only.
+   - Include the Signal to justify Buy/Sell/Hold suggestions.
+   - Keep advice actionable and **relevant only to these coins**.
+   - Note that crypto moves faster than stocks — flag any unusually large moves.
+"""
+    try:
+        return _generate_with_retry_extra(client, prompt)
+    except Exception as e:
+        logging.error(f"❌ Error in Gemini API call (crypto): {e}")
+        return results

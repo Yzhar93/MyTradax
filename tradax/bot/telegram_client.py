@@ -9,18 +9,20 @@ def escape_markdown(text):
     escape_chars = r"_*[]()~`>#+-=|{}.! "
     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
-def send_telegram_message(message):
+def send_telegram_message(message, chat_id=None):
     """
     Send a message to a Telegram chat using a bot.
 
     Requires the environment variables:
     - TELEGRAM_BOT_TOKEN
-    - TELEGRAM_CHAT_ID
+    - TELEGRAM_CHAT_ID (used when chat_id is not passed explicitly)
 
     :param message: string, the message to send
+    :param chat_id: optional Telegram chat ID; defaults to TELEGRAM_CHAT_ID env var
     """
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if chat_id is None:
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     if not token or not chat_id:
         raise ValueError("Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID environment variables.")
