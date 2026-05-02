@@ -32,3 +32,19 @@ def crypto_summary(event, context):
     except Exception as e:
         logging.error(f"Crypto function failed: {e}")
         return f"Error: {e}", 500
+
+
+def telegram_webhook(request):
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return "OK", 200
+        from tradax.bot.interactive.handlers import handle_message, handle_callback
+        if "callback_query" in data:
+            handle_callback(data["callback_query"])
+        elif "message" in data:
+            handle_message(data["message"])
+        return "OK", 200
+    except Exception as e:
+        logging.error(f"Webhook failed: {e}")
+        return "OK", 200  # always 200 so Telegram doesn't retry
