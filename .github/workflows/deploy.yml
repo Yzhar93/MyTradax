@@ -36,3 +36,15 @@ jobs:
             --timeout=300 \
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_API_URL=${{ secrets.GEMINI_API_URL }},FINNHUB_API_TOKEN=${{ secrets.FINNHUB_API_TOKEN }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }},TELEGRAM_CRYPTO_CHAT_ID=${{ secrets.TELEGRAM_CRYPTO_CHAT_ID }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
             --source=.
+      - name: Deploy crypto function
+        run: |
+          gcloud functions deploy crypto-summary \
+            --gen2 \
+            --runtime python311 \
+            --region=europe-west1 \
+            --entry-point=crypto_summary \
+            --trigger-topic=crypto-summary-topic \
+            --memory=512Mi \
+            --timeout=300 \
+            --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_API_URL=${{ secrets.GEMINI_API_URL }},FINNHUB_API_TOKEN=${{ secrets.FINNHUB_API_TOKEN }},TELEGRAM_CRYPTO_CHAT_ID=${{ secrets.TELEGRAM_CRYPTO_CHAT_ID }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+            --source=.      
