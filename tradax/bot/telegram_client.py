@@ -12,9 +12,9 @@ def escape_markdown(text):
 
 
 def _token() -> str:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN_INTERACTIVE")
     if not token:
-        raise ValueError("TELEGRAM_BOT_TOKEN is not set.")
+        raise ValueError("Neither TELEGRAM_BOT_TOKEN nor TELEGRAM_BOT_TOKEN_INTERACTIVE is set.")
     return token
 
 
