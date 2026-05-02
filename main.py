@@ -5,7 +5,8 @@ from tradax.bot.telegram_client import send_telegram_message
 from tradax.bot.llm_integration import enhance_message, enhance_message_advance, enhance_message_extra, enhance_message_crypto
 import logging
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 
 def stock_summary(event, context):
     try:
