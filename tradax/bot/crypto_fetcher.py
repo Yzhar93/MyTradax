@@ -19,34 +19,99 @@ _STABLE_SYMBOLS = {
     "gusd", "lusd", "ousd", "rsv", "usde", "fdusd",
 }
 
+# --- cache: key -> (expires_at, data) ---
+_cache: dict = {}
+_CACHE_TTL = 300        # 5 minutes
+_MIN_REQUEST_GAP = 6.0  # 10 calls/min max
+_last_request_at = 0.0
+
+
+def _api_get(url: str, params: dict = None) -> dict:
+    """Single entry point for all CoinGecko requests.
+
+    Applies:
+    - In-memory cache (5 min TTL)
+    - Rate limiting (min 6s between calls)
+    - Retry with exponential backoff on 429 (5s → 10s → 20s → 40s)
+    """
+    global _last_request_at
+
+    cache_key = (url, str(sorted((params or {}).items())))
+    now = time.time()
+
+    # Return cached data if still fresh
+    if cache_key in _cache:
+        expires_at, data = _cache[cache_key]
+        if now < expires_at:
+            logging.debug(f"Cache hit: {url}")
+            return data
+
+    # Enforce minimum gap between requests
+    gap = time.time() - _last_request_at
+    if gap < _MIN_REQUEST_GAP:
+        time.sleep(_MIN_REQUEST_GAP - gap)
+
+    # Request with retry on 429
+    wait = 5.0
+    max_retries = 4
+    for attempt in range(max_retries):
+        _last_request_at = time.time()
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+
+            if resp.status_code == 429:
+                if attempt < max_retries - 1:
+                    logging.warning(f"429 from CoinGecko, waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    wait *= 2
+                    continue
+                else:
+                    logging.error("429 persists after all retries, returning cached or empty")
+                    return _cache.get(cache_key, (None, None))[1] or {}
+
+            resp.raise_for_status()
+            data = resp.json()
+            _cache[cache_key] = (time.time() + _CACHE_TTL, data)
+            return data
+
+        except requests.exceptions.HTTPError as e:
+            if attempt < max_retries - 1:
+                logging.warning(f"HTTP error {e}, retrying in {wait}s")
+                time.sleep(wait)
+                wait *= 2
+            else:
+                logging.error(f"Request failed after {max_retries} attempts: {e}")
+                raise
+
+    return {}
+
 
 def _get_top_coins(limit=150):
-    url = f"{COINGECKO_BASE}/coins/markets"
-    params = {
+    data = _api_get(f"{COINGECKO_BASE}/coins/markets", params={
         "vs_currency": "usd",
         "order": "market_cap_desc",
         "per_page": limit,
         "page": 1,
         "price_change_percentage": "24h,7d,30d",
         "sparkline": False,
-    }
-    resp = requests.get(url, params=params, timeout=30)
-    resp.raise_for_status()
-    coins = resp.json()
+    })
+    if not data:
+        return []
     return [
-        c for c in coins
+        c for c in data
         if c["id"] not in _STABLE_IDS
         and c.get("symbol", "").lower() not in _STABLE_SYMBOLS
     ]
 
 
-def _get_coin_market_chart(coin_id, days=31):
-    """Returns DataFrame with daily Close and Volume columns."""
-    url = f"{COINGECKO_BASE}/coins/{coin_id}/market_chart"
-    params = {"vs_currency": "usd", "days": days, "interval": "daily"}
-    resp = requests.get(url, params=params, timeout=20)
-    resp.raise_for_status()
-    data = resp.json()
+def _get_coin_market_chart(coin_id: str, days=31) -> pd.DataFrame:
+    data = _api_get(f"{COINGECKO_BASE}/coins/{coin_id}/market_chart", params={
+        "vs_currency": "usd",
+        "days": days,
+        "interval": "daily",
+    })
+    if not data:
+        return pd.DataFrame()
 
     prices = pd.DataFrame(data["prices"], columns=["ts", "Close"])
     volumes = pd.DataFrame(data["total_volumes"], columns=["ts", "Volume"])
@@ -56,8 +121,11 @@ def _get_coin_market_chart(coin_id, days=31):
     return df
 
 
-def get_top_cryptos(top_n=10, intersect_n=20):
+def get_top_cryptos(top_n=10, intersect_n=20, max_signal_coins=5):
     coins = _get_top_coins(limit=150)
+    if not coins:
+        logging.error("No coin data returned from CoinGecko")
+        return {"daily": [], "weekly": [], "monthly": [], "intersection": [], "intersection_with_signals": []}
 
     rows = []
     for c in coins:
@@ -86,22 +154,27 @@ def get_top_cryptos(top_n=10, intersect_n=20):
         except Exception as e:
             logging.warning(f"Error parsing coin {c.get('id')}: {e}")
 
+    if not rows:
+        return {"daily": [], "weekly": [], "monthly": [], "intersection": [], "intersection_with_signals": []}
+
     daily_sorted = sorted(rows, key=lambda x: abs(x["daily_change"]), reverse=True)[:intersect_n]
     weekly_sorted = sorted(rows, key=lambda x: abs(x["weekly_change"]), reverse=True)[:intersect_n]
     monthly_sorted = sorted(rows, key=lambda x: abs(x["monthly_change"]), reverse=True)[:intersect_n]
 
-    daily_ids = {x["id"] for x in daily_sorted}
-    weekly_ids = {x["id"] for x in weekly_sorted}
-    monthly_ids = {x["id"] for x in monthly_sorted}
-    intersection_ids = daily_ids & weekly_ids & monthly_ids
+    intersection_ids = (
+        {x["id"] for x in daily_sorted}
+        & {x["id"] for x in weekly_sorted}
+        & {x["id"] for x in monthly_sorted}
+    )
 
-    # Fetch OHLCV and compute signals only for intersection coins
+    # Cap signal fetches to avoid hammering the API
+    signal_ids = list(intersection_ids)[:max_signal_coins]
     signals: dict[str, str] = {}
-    for coin_id in intersection_ids:
+
+    for coin_id in signal_ids:
         try:
-            time.sleep(1.5)  # CoinGecko free tier rate limit
             df = _get_coin_market_chart(coin_id, days=31)
-            if len(df) < 15:
+            if df.empty or len(df) < 15:
                 continue
             df = calculate_ma(df, short_window=5, long_window=15)
             df["RSI"] = calculate_rsi_advanced(df["Close"])
@@ -109,16 +182,14 @@ def get_top_cryptos(top_n=10, intersect_n=20):
             df = generate_trading_signal_advanced(df)
             signals[coin_id] = df["Signal"].iloc[-1]
         except Exception as e:
-            logging.warning(f"Could not compute signal for {coin_id}: {e}")
+            logging.warning(f"Signal compute failed for {coin_id}: {e}")
 
     for lst in (daily_sorted, weekly_sorted, monthly_sorted):
         for item in lst:
             if item["id"] in signals:
                 item["Signal"] = signals[item["id"]]
 
-    intersection_symbols = [
-        x["symbol"] for x in daily_sorted if x["id"] in intersection_ids
-    ]
+    intersection_symbols = [x["symbol"] for x in daily_sorted if x["id"] in intersection_ids]
 
     return {
         "daily": daily_sorted[:top_n],
