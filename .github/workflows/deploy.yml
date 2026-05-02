@@ -60,5 +60,5 @@ jobs:
             --allow-unauthenticated \
             --memory=512Mi \
             --timeout=120 \
-            --set-env-vars TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
+            --set-env-vars TELEGRAM_BOT_TOKEN_INTERACTIVE=${{ secrets.TELEGRAM_BOT_TOKEN_INTERACTIVE }},TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
             --source=.
