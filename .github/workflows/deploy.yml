@@ -49,6 +49,19 @@ jobs:
             --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_API_URL=${{ secrets.GEMINI_API_URL }},FINNHUB_API_TOKEN=${{ secrets.FINNHUB_API_TOKEN }},TELEGRAM_CRYPTO_CHAT_ID=${{ secrets.TELEGRAM_CRYPTO_CHAT_ID }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
             --source=.
 
+      - name: Deploy indices function
+        run: |
+          gcloud functions deploy indices-summary \
+            --gen2 \
+            --runtime python311 \
+            --region=europe-west1 \
+            --entry-point=indices_summary \
+            --trigger-topic=indices-summary-topic \
+            --memory=512Mi \
+            --timeout=300 \
+            --set-env-vars GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},GEMINI_API_URL=${{ secrets.GEMINI_API_URL }},TELEGRAM_INDICES_CHAT_ID=${{ secrets.TELEGRAM_INDICES_CHAT_ID }},TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+            --source=.
+
       - name: Deploy telegram webhook
         run: |
           gcloud functions deploy telegram-webhook \

@@ -1,7 +1,8 @@
 import logging
 
 from tradax.bot.interactive.menus import (
-    main_menu, asset_list_menu, action_menu, timerange_menu
+    main_menu, asset_list_menu, action_menu, timerange_menu,
+    index_list_menu, INDEX_NAMES,
 )
 from tradax.bot.interactive.analysis import run_analysis
 from tradax.bot.interactive.backtest import run_backtest
@@ -41,12 +42,15 @@ def handle_callback(callback: dict) -> None:
                 edit_telegram_message(chat_id, msg_id, "Choose a market:", main_menu())
             elif target in ("stocks", "crypto"):
                 edit_telegram_message(chat_id, msg_id, "Pick an asset:", asset_list_menu(target))
+            elif target == "indices":
+                edit_telegram_message(chat_id, msg_id, "Pick an index:", index_list_menu())
 
         elif tag == "pick":
             _, market, symbol = parts
+            label = INDEX_NAMES.get(symbol, symbol) if market == "indices" else symbol
             edit_telegram_message(
                 chat_id, msg_id,
-                f"{symbol} — choose action:",
+                f"{label} — choose action:",
                 action_menu(market, symbol),
             )
 

@@ -176,3 +176,42 @@ Finally, in 💡 Crypto Insight & Advice:
     except Exception as e:
         logging.error(f"❌ Error in Gemini API call (crypto): {e}")
         return results
+
+
+def enhance_message_indices(results):
+    prompt = f"""
+You are a professional macro market analyst. The raw indices data is already shown to the user above.
+Your job is to add ANALYSIS ONLY — do not repeat the numbers.
+
+Here is the data for context:
+{results}
+
+Write EXACTLY these 4 sections:
+
+🌡 Risk Pulse:
+- VIX: fearful or calm? (above 20 = elevated fear)
+- 10Y Treasury yield direction and its impact on equities
+- One sentence: risk-on or risk-off tone right now
+
+🔄 Sector Rotation:
+- Which US sectors lead? Which lag?
+- Any divergence between tech (XLK) and defensives?
+
+🚀 Theme Check (AI / Clean Energy / Space):
+- One sentence each: beating or trailing the broad market?
+
+📋 Summary & What to Watch:
+- 3-4 sentences on the key macro story today
+- Then a short bullet list (3 items) of specific things to monitor this week:
+  - key economic data releases
+  - price levels to watch (VIX, yields, index levels)
+  - sector or theme breakouts to track
+
+Plain text only. No markdown. Max 250 words.
+"""
+    try:
+        analysis = _generate_with_retry_extra(client, prompt)
+        return f"{results}\n\n─────────────────────\n{analysis}"
+    except Exception as e:
+        logging.error(f"❌ Error in Gemini API call (indices): {e}")
+        return results

@@ -103,6 +103,44 @@ def build_message_crypto(crypto_data, title="🪙 Crypto Movers Summary"):
     return "\n".join(parts)
 
 
+_INDEX_CATEGORY_EMOJI = {
+    "US Major":           "🇺🇸",
+    "US Sectors":         "💼",
+    "Volatility & Rates": "🌡",
+    "International":      "🌍",
+    "Commodities":        "⛏",
+    "AI & Robotics":      "🤖",
+    "Clean Energy":       "🌱",
+    "Space":              "🚀",
+}
+
+
+def format_index_category(category_name: str, indices: list) -> str:
+    emoji = _INDEX_CATEGORY_EMOJI.get(category_name, "📊")
+    lines = [f"{emoji} {category_name}:"]
+    for idx in indices:
+        direction = "🔼" if idx["daily_change"] > 0 else "🔽" if idx["daily_change"] < 0 else "⏺"
+        lines.append(
+            f"{direction} {idx['name']} ({idx['symbol']}): ${idx['price']:,.2f}"
+            f" | Day: {idx['daily_change']:+.2f}%"
+            f" | Week: {idx['weekly_change']:+.2f}%"
+            f" | Month: {idx['monthly_change']:+.2f}%"
+            f" | {idx['Signal']}"
+        )
+    return "\n".join(lines)
+
+
+def build_message_indices(data: dict, title="📊 Market Indices Summary") -> str:
+    if not data:
+        return f"{title}\n\nNo indices data available."
+    parts = [title, ""]
+    for category, indices in data.items():
+        if indices:
+            parts.append(format_index_category(category, indices))
+            parts.append("")
+    return "\n".join(parts).rstrip()
+
+
 def build_message_advance(top_stocks_data, title="📊 S&P 500 Movers Summary"):
     """Build a formatted Telegram message from stock data dictionary."""
     if not top_stocks_data or not any(top_stocks_data.values()):

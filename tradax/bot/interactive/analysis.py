@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import pandas as pd
 import yfinance as yf
@@ -64,6 +66,13 @@ def _fetch_df(market: str, symbol: str, days: int) -> pd.DataFrame | None:
             df = df[["Close", "Volume"]].dropna()
             df.columns = ["Close", "Volume"]
             return df
+        elif market == "indices":
+            df = yf.download(symbol, period="1mo", interval="1d", progress=False)
+            if df.empty:
+                return None
+            df = df[["Close", "Volume"]].copy()
+            df["Volume"] = df["Volume"].fillna(0)
+            return df.dropna(subset=["Close"])
         else:
             coin_id = CRYPTO_ID_MAP.get(symbol.upper(), symbol.lower())
             return _get_coin_market_chart(coin_id, days=days)
