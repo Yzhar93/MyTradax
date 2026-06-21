@@ -38,6 +38,23 @@ def crypto_summary(event, context):
         return f"Error: {e}", 500
 
 
+def indices_summary(event, context):
+    from tradax.bot.indices_fetcher import get_indices_data
+    from tradax.bot.message_builder import build_message_indices
+    from tradax.bot.telegram_client import send_long_message
+    from tradax.bot.llm_integration import enhance_message_indices
+    try:
+        data = get_indices_data()
+        msg = build_message_indices(data)
+        msg = enhance_message_indices(msg)
+        indices_chat_id = os.environ.get("TELEGRAM_INDICES_CHAT_ID")
+        send_long_message(msg, chat_id=indices_chat_id, parse_mode=None)
+        return "OK", 200
+    except Exception as e:
+        logging.error(f"indices_summary failed: {e}")
+        return f"Error: {e}", 500
+
+
 def telegram_webhook(request):
     from tradax.bot.interactive.handlers import handle_message, handle_callback
     try:

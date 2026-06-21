@@ -65,6 +65,29 @@ def edit_telegram_message(chat_id, message_id, text, reply_markup=None):
     return resp.json()
 
 
+def send_long_message(message, chat_id=None, parse_mode="MarkdownV2", chunk_size=4000):
+    """Split a long message into chunks and send each one."""
+    if len(message) <= chunk_size:
+        send_telegram_message(message, chat_id=chat_id, parse_mode=parse_mode)
+        return
+
+    lines = message.split("\n")
+    chunk = []
+    current_len = 0
+
+    for line in lines:
+        line_len = len(line) + 1  # +1 for newline
+        if current_len + line_len > chunk_size and chunk:
+            send_telegram_message("\n".join(chunk), chat_id=chat_id, parse_mode=parse_mode)
+            chunk = []
+            current_len = 0
+        chunk.append(line)
+        current_len += line_len
+
+    if chunk:
+        send_telegram_message("\n".join(chunk), chat_id=chat_id, parse_mode=parse_mode)
+
+
 def answer_callback_query(callback_query_id: str):
     """Dismiss the loading spinner on an inline button tap."""
     requests.post(
